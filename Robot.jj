@@ -1,0 +1,407 @@
+/*
+Gramatica para el Robot:
+Autor: Alejandro Arango
+Modificado por: Silvia Takahashi
+Modificado por: Juan Pablo Morales.
+Agregadas producciones para manejar globos
+Modificado por Silvia Takahashi
+
+
+ **/
+
+
+options 
+{
+  
+	LOOKAHEAD=1; 
+	IGNORE_CASE=true;
+	STATIC = false;
+	
+}
+   
+
+PARSER_BEGIN(Robot)
+
+package uniandes.lym.robot.control;
+
+import uniandes.lym.robot.kernel.*;
+import uniandes.lym.robot.view.Console;
+ 
+import java.awt.Point;
+import java.io.*;
+import java.util.Vector;
+import java.util.LinkedList;
+import java.util.*;
+
+@SuppressWarnings("serial")
+public class Robot 
+{
+
+
+	private RobotWorldDec world;
+	private HashMap<String, Integer> variables = new HashMap<String, Integer>();
+	private HashMap<String, ArrayList<String>> procedures = new HashMap<String, ArrayList<String>>();
+	
+	
+	void setWorld(RobotWorld w) {
+		world = (RobotWorldDec) w;	
+	}
+
+	String salida=new String();
+}
+PARSER_END(Robot)
+
+SKIP:
+{
+	" "
+	|	"\r"
+	|	"\t"
+	| "\n"
+}
+
+TOKEN: /* Nombres de Comandos */
+{
+
+			<MOVE:  "move">
+		| 	<PUT: "put">
+		| 	<PICK: "pick">
+		|  < POP: "pop" >
+        |	<TURN : "turn">
+        |	<FACE : "face">
+        |	<MOVEINDIR : "moveInDir">
+        |	<MOVETOTHE : "moveToThe">
+        |	<JUMPTOTHE : "jumpToThe">
+        |	<JUMPINDIR : "jumpInDir">
+        |	<GOTO : "goTo">
+        |	<ASSIGNTO : "assignTo">
+
+        |	<VARS : "VARS">
+       
+
+		|   <C : ",">
+		|   <LP : "|">
+		| 	<LCB : "[">
+		|   <RCB : "]">
+		|	<SC : ";">
+		|	<PP : ":">
+		
+		
+		|	<PROCS : "PROCS">
+        |  < ROBOTR:  "ROBOT_R" >
+
+        |   <FACING : "facing">
+		|   <CANPUT : "canPut">
+		|	<CANPICK : "canPick">
+		|   <CMINDIR : "canMoveInDir">
+		|   <CJINDIR : "canJumpInDir">
+		|	<CMTOTHE : "canMoveToThe">
+		|	<CJTOTHE : "canJumpToThe">
+		|	<NOT : "not">
+		|	<NOP : "nop">
+		
+
+
+        |	<IF : "if">
+        |	<THEN : "then">
+        | 	<ELSE : "else">
+        |	<WHILE : "while">
+        |	<DO : "do">
+        
+        |   <REPEATTIMES : "repeat">
+
+        | 	<LEFT : "left">
+		| 	<RIGHT : "right">
+		| 	<AROUND : "around">
+		| 	<NORTH : "north">
+		| 	<SOUTH : "south">
+		| 	<EAST : "east">
+		| 	<WEST : "west">
+		| 	<BACK : "back" >
+        		
+
+}
+
+TOKEN:
+{
+		<BALLOONS:  "BALLOONS" >
+		|	<CHIPS:     "CHIPS"  >	
+
+}
+
+
+
+TOKEN :
+{
+		<NUM: (<DIGIT>)+ >
+		|  	<#DIGIT: ["0"-"9"] >
+		| < #UPPER : ["A"-"Z"] >
+		| < #LOWER: ["a"-"z"] >
+		| < VARNAME : <LOWER> (< UPPER> | <LOWER>)* >
+        
+}
+
+
+	//boolean command(uniandes.lym.robot.view.Console sistema) :
+	
+	boolean command(Console sistema):
+	{}
+	{
+      (<ROBOTR> ( generic() ";"  |  block() | resolveIf() ) { return true; } | <EOF> { return false; }) | <LCB> ( ( generic() ";"  |  block() | resolveIf() ) <SC> )* <RCB> { return true; }
+	   	
+	}
+		void generic():
+	{
+	  	int x,y;
+		salida = new String();
+		String cardinality = new String();
+		String currentVar = new String();
+		boolean notTrigger = false;
+		boolean condState = false;
+	}
+	
+	
+	{
+		(
+		  <MOVE>  resolveWalk()	  
+		| <JUMPTOTHE> <PP> x = num() <C> y = num() { world.setPosition(x, y); salida = "Command : jumpToThe";}
+		|  <TURN> <PP> resolveSide()
+		| <FACE> <PP> cardinality = actualFacing() { getLook(cardinality); salida = "Command: face";}	  			  			
+		|  <VARS> resolveVar()
+        | <PUT> <PP> x = num() <C>  y = resolveBallChip() { if (y == <BALLOONS>) { world.pickBalloons(x); salida = "Command: pick"; } else if (y == <CHIPS>) { world.pickChips(x); salida = "Command: pick"; } }
+        | <PICK> <PP> x = num() <C> y = resolveBallChip() { if (y == <BALLOONS>) { world.grabBalloons(x); salida = "Command: pick"; } else if (y == <CHIPS>) { world.grabChips(x); salida = "Command: pick"; } }
+		| <MOVETOTHE> <PP> x = num() <C> y = num()  {world.moveTo(x, y);salida = "Command: moveToThe";}
+		|  <MOVEINDIR> <PP> cardinality = actualFacing() <C> x = num() { world.moveInDirection(cardinality, x); salida = "Command : moveInDir"; }
+		| <JUMPTOTHE> <PP> x = num() <C> y = num() { world.setPosition(x, y); salida = "Command : jumpToThe"; }
+        | <JUMPINDIR> <PP> num() <C> resolveDirection() { world.jumpInDir(distance, direction); salida = "Command: jumpInDir"; }
+        |  <NOP> {  }
+        | <REPEATTIMES> <PP> x = num() <LCB> ( generic() <SC> )* <RCB> { for (int i = 0; i < x; i++) { command(sistema); } salida = "Command : repeatTimes"; })
+		)  
+	}
+	
+	
+	void resolveIf():
+	{
+		boolean trigger = false;
+	}
+	{
+	  <IF> <PP> trigger = resolveCond()  { if (trigger) {block();}} (<THEN> <PP>| <ELSE> <PP> { if (!trigger) { block();}} )
+	}
+
+	void block():
+	{}
+	{
+	  <LCB> (generic() (<SC> generic())* ) <RCB>
+	}
+
+	void resolveWalk():
+	{
+	  int x;
+	}
+	{
+	  (	<LEFT> <PP> x = num(){ world.turnRight(); world.turnRight(); world.turnRight(); world.moveForward(x,false);})
+	|	(<BACK> <PP> x = num() { world.turnRight(); world.turnRight(); world.moveForward(x,false); salida = "Command : move";})
+	|	(<RIGHT> <PP> x = num() { world.turnRight(); world.moveForward(x,false); salida = "Command : move"; })
+	|   (<NORTH > <PP> x = num() { getLook("north"); world.moveForward(x,false); salida = "Command : move"; })
+	|   (<SOUTH > <PP> x = num() { getLook("south"); world.moveForward(x,false); salida = "Command : move"; })
+	|   (<EAST > <PP> x = num() { getLook("east"); world.moveForward(x,false); salida = "Command : move"; })
+	|   (<WEST > <PP> x = num() { getLook("west"); world.moveForward(x,false); salida = "Command : move"; })
+	|   (x = num() { world.moveForward(x,false); salida = "Command : move";})
+	}
+
+	boolean resolveCond():
+	{
+	  	boolean flag = false;
+	  	boolean factor = false;
+		boolean notTrigger = false;
+	}
+	{
+	  	(<NOT> {notTrigger = true;} (flag = resolveFacing()) { if (flag && notTrigger) {flag = false;} else if ((!flag) && notTrigger) { flag = true;} ;} | flag = resolveFacing()) {return flag;}
+	}
+	
+	boolean resolveFacing():
+	{
+	  boolean flag = false;
+	  String blank = new String();
+	  int transformation = -1;
+	}
+	{
+	  (<FACING> <PP> (<NORTH> | <SOUTH> | <EAST> | <WEST>) { blank = token.image; transformation = transformFacing(blank); flag = (transformation == world.getFacing());} )
+	  { return flag; }
+	}
+
+	int transformFacing(String facing):
+	{}
+	{
+	  { 
+	  if (facing.equals("north")) {return 0;}
+	  else if (facing.equals("south")) {return 1;}
+	  else if (facing.equals("east")) {return 2;}
+	  else if (facing.equals("west")) {return 3;}
+	}
+	}
+
+	String resolveBallChip():
+	{
+	  Token t;
+	}
+	{
+	  t = (<BALLOONS> | <CHIPS>)
+	  {
+	    return t.image;
+	  }
+	}
+	
+	String resolveDirection():
+	{
+	  Token t;
+	}
+	{
+	  t = (<NORTH> | <SOUTH> | <EAST> | <WEST>)
+	  {
+	    return t.image;
+	  }
+	}
+	
+
+    String resolveAssignment():
+	{String blank = new String();}
+	{
+	  <VARNAME> {if (variables.containsKey(token.image)) {blank = token.image;  salida = "Variable assignment"; } else { throw new Error(": " + token.image + " hasn't been declared"); } return blank;}
+	}
+	
+	void resolveVar():
+	{
+		String seq;
+		
+	}
+	{
+	  (<VARNAME> {seq = token.image; variables.put(seq, 0);} (<C> <VARNAME> { seq = token.image; variables.put(seq, 0);} )* )
+	  { salida = "Variable definition"; } 
+	}
+
+	void resolveSide()	:
+	{}
+	{
+	  (	<LEFT> { world.turnRight(); world.turnRight(); world.turnRight(); salida = "Command : turn";})
+	|	(<AROUND> { world.turnRight(); world.turnRight(); salida = "Command : turn";})
+	|	(<RIGHT> { world.turnRight(); salida = "Command : turn"; })
+	}
+
+
+	String actualFacing():
+	{
+	  String cardinality;
+	}
+	{
+	 (<NORTH> | <SOUTH> | <EAST> | <WEST>)
+	 {
+	  	cardinality = token.image;
+	 	return cardinality;
+	 }
+	}
+
+
+	void getLook(String nueva):
+	{}
+	{	
+	{
+	 int actual = world.getFacing();
+	 int rotaciones = 0;
+
+	System.out.println(nueva);
+	System.out.println(actual);
+	 
+	 if (nueva.equals("north")) { 
+	 	if (actual == 0) {
+	 	    rotaciones = 0;
+	 	}
+	 	else if (actual == 1) {
+	 	  	rotaciones = 2;
+	 	}
+	 	else if (actual == 2) {
+	 	    rotaciones = 3;
+	 	}
+	 	else if (actual == 3) {
+	 	    rotaciones = 1;
+	 	}
+	 }
+	 else if (nueva.equals("east")) { 
+	 	if (actual == 0) {
+	 	    rotaciones = 1;
+	 	}
+	 	else if (actual == 1) {
+	 	    rotaciones = 3;
+	 	}
+	 	else if (actual == 2) {
+			rotaciones = 0;
+	 	}
+	 	else if (actual == 3) {
+	 	    rotaciones = 2;
+	 	}
+	 }
+	 else if (nueva.equals("south")) {
+	    System.out.println("entró");
+	 	if (actual == 0) {
+	 	    rotaciones = 2;
+	 	}
+	 	else if (actual == 1) {
+	 	    rotaciones = 0;
+	 	}
+	 	else if (actual == 2) {
+	 	    rotaciones = 1;
+	 	}
+	 	else if (actual == 3) {
+	 	    rotaciones = 3;
+	 	}
+	 }
+	 else if (nueva.equals("west")) { 
+	 	if (actual == 0) {
+	 	    rotaciones = 3;
+	 	}
+	 	else if (actual == 1) {
+	 	    rotaciones = 1;
+	 	}
+	 	else if (actual == 2) {
+			rotaciones = 2;
+	 	}
+	 	else if (actual == 3) {
+	 		rotaciones = 0;
+	 	}
+	 }
+
+	 System.out.println(rotaciones);
+	 
+	 int i;
+	 for(i=0; i < rotaciones; i++) {
+	     world.turnRight();
+	 }
+	}
+	}
+	
+
+	/**
+	 * Unsigned decimal number
+	 * @return the corresponding value of the string
+	 * @error  corresponding value is too large
+	 */
+
+	int num() throws Error:
+	{	
+		int total=0;
+	}
+	{
+		( <NUM>
+		{
+			try 
+			{
+				total = Integer.parseInt(token.image);
+			} 
+			catch (NumberFormatException ee) 
+			{
+				throw new Error("Number out of bounds: " + token.image + " !!");
+			}
+			return total;
+		})|( <VARNAME> {total = variables.get(token.image); return total;})
+	}
+
+	
